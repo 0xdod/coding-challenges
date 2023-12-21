@@ -31,3 +31,13 @@ func Test_countWords(t *testing.T) {
 		t.Errorf("got %v want %v", got, want)
 	}
 }
+
+func Test_countCharacters(t *testing.T) {
+	input := "test.txt"
+	want := int64(339292)
+	got := countCharacters(input)
+
+	if got != want {
+		t.Errorf("got %v want %v", got, want)
+	}
+}
