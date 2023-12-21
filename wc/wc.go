@@ -2,29 +2,15 @@ package main
 
 import (
 	"bufio"
-	"os"
+	"bytes"
 )
 
-func countBytes(filePath string) int64 {
-	file, err := os.Open(filePath)
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-
-	fi, _ := file.Stat()
-
-	return fi.Size()
+func countBytes(content []byte) int64 {
+	return int64(len(content))
 }
 
-func countLines(filePath string) int64 {
-	file, err := os.Open(filePath)
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
+func countLines(content []byte) int64 {
+	scanner := bufio.NewScanner(bytes.NewBuffer(content))
 	var count int64
 
 	for scanner.Scan() {
@@ -34,16 +20,8 @@ func countLines(filePath string) int64 {
 	return count
 }
 
-func countWords(filePath string) int64 {
-	file, err := os.Open(filePath)
-
-	if err != nil {
-		panic(err)
-	}
-
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
+func countWords(content []byte) int64 {
+	scanner := bufio.NewScanner(bytes.NewBuffer(content))
 	scanner.Split(bufio.ScanWords)
 
 	var count int64
@@ -55,16 +33,9 @@ func countWords(filePath string) int64 {
 	return count
 }
 
-func countCharacters(filePath string) int64 {
-	file, err := os.Open(filePath)
+func countCharacters(content []byte) int64 {
+	scanner := bufio.NewScanner(bytes.NewBuffer(content))
 
-	if err != nil {
-		panic(err)
-	}
-
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
 	scanner.Split(bufio.ScanRunes)
 
 	var count int64

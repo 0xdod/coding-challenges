@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -40,32 +42,57 @@ func main() {
 	var fmtStr []string
 	var fmtArgs []interface{}
 
+	var buffer []byte
+
+	if len(files) == 0 {
+		scanner := bufio.NewScanner(os.Stdin)
+		scanner.Split(bufio.ScanBytes)
+		for scanner.Scan() {
+			buffer = append(buffer, scanner.Bytes()...)
+		}
+		fmt.Println()
+	} else {
+		file, err := os.Open(files[0])
+
+		if err != nil {
+			fmt.Printf("ccwc: %v\n", err)
+			os.Exit(1)
+		}
+		defer file.Close()
+
+		fi, _ := file.Stat()
+		buffer = make([]byte, fi.Size())
+		file.Read(buffer)
+	}
+
 	if linesCountFlag {
-		linesCount = countLines(files[0])
+		linesCount = countLines(buffer)
 		fmtStr = append(fmtStr, "%d ")
 		fmtArgs = append(fmtArgs, linesCount)
 	}
 
 	if wordsCountFlag {
-		wordsCount = countWords(files[0])
+		wordsCount = countWords(buffer)
 		fmtStr = append(fmtStr, "%d")
 		fmtArgs = append(fmtArgs, wordsCount)
 	}
 
 	if charactersCountFlag {
-		charsCount = countCharacters(files[0])
+		charsCount = countCharacters(buffer)
 		fmtStr = append(fmtStr, "%d")
 		fmtArgs = append(fmtArgs, charsCount)
 	}
 
 	if bytesCountFlag {
-		bytesCount = countBytes(files[0])
+		bytesCount = countBytes(buffer)
 		fmtStr = append(fmtStr, "%d")
 		fmtArgs = append(fmtArgs, bytesCount)
 	}
 
-	fmtStr = append(fmtStr, "%s\n")
-	fmtArgs = append(fmtArgs, files[0])
+	if len(files) > 0 {
+		fmtStr = append(fmtStr, "%s")
+		fmtArgs = append(fmtArgs, files[0])
+	}
 
-	fmt.Printf("  "+strings.Join(fmtStr, " "), fmtArgs...)
+	fmt.Printf("  "+strings.Join(fmtStr, " ")+"\n", fmtArgs...)
 }
