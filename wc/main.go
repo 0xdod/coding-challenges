@@ -8,28 +8,57 @@ import (
 	"strings"
 )
 
-func main() {
-	var (
-		bytesCountFlag      bool
-		linesCountFlag      bool
-		wordsCountFlag      bool
-		charactersCountFlag bool
-	)
+var (
+	bytesCountFlag      bool
+	linesCountFlag      bool
+	wordsCountFlag      bool
+	charactersCountFlag bool
+)
 
+func init() {
 	flag.BoolVar(&bytesCountFlag, "c", false, "count bytes")
 	flag.BoolVar(&linesCountFlag, "l", false, "count lines")
 	flag.BoolVar(&wordsCountFlag, "w", false, "count words")
 	flag.BoolVar(&charactersCountFlag, "m", false, "count characters")
+}
 
+func setDefaultFlags() {
+	linesCountFlag = true
+	bytesCountFlag = true
+	wordsCountFlag = true
+}
+
+func readFromStdIn() []byte {
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Split(bufio.ScanBytes)
+	var buffer []byte
+	for scanner.Scan() {
+		buffer = append(buffer, scanner.Bytes()...)
+	}
+	return buffer
+}
+
+func readFromFile(path string) []byte {
+	file, err := os.Open(path)
+
+	if err != nil {
+		fmt.Printf("ccwc: %v\n", err)
+		os.Exit(1)
+	}
+	defer file.Close()
+
+	fi, _ := file.Stat()
+	buffer := make([]byte, fi.Size())
+	file.Read(buffer)
+
+	return buffer
+}
+
+func main() {
 	flag.Parse()
 
-	files := flag.Args()
-	// fmt.Println(files)
-
 	if flag.NFlag() == 0 {
-		linesCountFlag = true
-		bytesCountFlag = true
-		wordsCountFlag = true
+		setDefaultFlags()
 	}
 
 	var (
@@ -39,60 +68,51 @@ func main() {
 		charsCount int64
 	)
 
-	var fmtStr []string
+	var fmtStrs []string
 	var fmtArgs []interface{}
 
 	var buffer []byte
 
-	if len(files) == 0 {
-		scanner := bufio.NewScanner(os.Stdin)
-		scanner.Split(bufio.ScanBytes)
-		for scanner.Scan() {
-			buffer = append(buffer, scanner.Bytes()...)
-		}
-		fmt.Println()
+	args := flag.Args()
+
+	if len(args) == 0 {
+		buffer = readFromStdIn()
 	} else {
-		file, err := os.Open(files[0])
-
-		if err != nil {
-			fmt.Printf("ccwc: %v\n", err)
-			os.Exit(1)
-		}
-		defer file.Close()
-
-		fi, _ := file.Stat()
-		buffer = make([]byte, fi.Size())
-		file.Read(buffer)
+		buffer = readFromFile(args[0])
 	}
 
 	if linesCountFlag {
 		linesCount = countLines(buffer)
-		fmtStr = append(fmtStr, "%d ")
+		fmtStrs = append(fmtStrs, "%d ")
 		fmtArgs = append(fmtArgs, linesCount)
 	}
 
 	if wordsCountFlag {
 		wordsCount = countWords(buffer)
-		fmtStr = append(fmtStr, "%d")
+		fmtStrs = append(fmtStrs, "%d")
 		fmtArgs = append(fmtArgs, wordsCount)
 	}
 
 	if charactersCountFlag {
 		charsCount = countCharacters(buffer)
-		fmtStr = append(fmtStr, "%d")
+		fmtStrs = append(fmtStrs, "%d")
 		fmtArgs = append(fmtArgs, charsCount)
 	}
 
 	if bytesCountFlag {
 		bytesCount = countBytes(buffer)
-		fmtStr = append(fmtStr, "%d")
+		fmtStrs = append(fmtStrs, "%d")
 		fmtArgs = append(fmtArgs, bytesCount)
 	}
 
-	if len(files) > 0 {
-		fmtStr = append(fmtStr, "%s")
-		fmtArgs = append(fmtArgs, files[0])
+	fmtStr := "  " + strings.Join(fmtStrs, " ")
+
+	if len(args) > 0 {
+		fmtStr = fmtStr + " %s\n"
+		fmtArgs = append(fmtArgs, args[0])
+	} else {
+		fmtStr = "\n" + fmtStr + "\n"
 	}
 
-	fmt.Printf("  "+strings.Join(fmtStr, " ")+"\n", fmtArgs...)
+	fmt.Printf(fmtStr, fmtArgs...)
 }
