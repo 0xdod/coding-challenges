@@ -30,13 +30,7 @@ func setDefaultFlags() {
 	wordsCountFlag = true
 }
 
-func main() {
-	flag.Parse()
-
-	if flag.NFlag() == 0 {
-		setDefaultFlags()
-	}
-
+func wc() {
 	var (
 		bytesCount int64
 		linesCount int64
@@ -122,4 +116,14 @@ func main() {
 	}
 
 	fmt.Printf(fmtStr, fmtArgs...)
+}
+
+func main() {
+	flag.Parse()
+
+	if flag.NFlag() == 0 {
+		setDefaultFlags()
+	}
+
+	wc()
 }
