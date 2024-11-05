@@ -2,10 +2,12 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
+	"unicode/utf8"
 )
 
 var (
@@ -28,32 +30,6 @@ func setDefaultFlags() {
 	wordsCountFlag = true
 }
 
-func readFromStdIn() []byte {
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Split(bufio.ScanBytes)
-	var buffer []byte
-	for scanner.Scan() {
-		buffer = append(buffer, scanner.Bytes()...)
-	}
-	return buffer
-}
-
-func readFromFile(path string) []byte {
-	file, err := os.Open(path)
-
-	if err != nil {
-		fmt.Printf("ccwc: %v\n", err)
-		os.Exit(1)
-	}
-	defer file.Close()
-
-	fi, _ := file.Stat()
-	buffer := make([]byte, fi.Size())
-	file.Read(buffer)
-
-	return buffer
-}
-
 func main() {
 	flag.Parse()
 
@@ -71,36 +47,67 @@ func main() {
 	var fmtStrs []string
 	var fmtArgs []interface{}
 
-	var buffer []byte
-
 	args := flag.Args()
 
+	var file *os.File
+
 	if len(args) == 0 {
-		buffer = readFromStdIn()
+		file = os.Stdin
 	} else {
-		buffer = readFromFile(args[0])
+		var err error
+		path := args[0]
+
+		file, err = os.Open(path)
+
+		if err != nil {
+			fmt.Printf("ccwc: %v\n", err)
+			os.Exit(1)
+		}
+
+		defer file.Close()
+	}
+
+	scanner := bufio.NewScanner(file)
+	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		advance, token, err = bufio.ScanLines(data, atEOF)
+
+		if i := bytes.IndexByte(data, '\n'); i >= 0 {
+			if len(data[:i]) > 0 && data[i-1] == '\r' {
+				token = append(token, '\r')
+			}
+
+			token = append(token, '\n')
+		}
+
+		return
+	})
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		linesCount += 1
+
+		wordsCount += int64(len(strings.Fields(line)))
+		charsCount += int64(utf8.RuneCountInString(line))
+		bytesCount += int64(len(line))
 	}
 
 	if linesCountFlag {
-		linesCount = countLines(buffer)
 		fmtStrs = append(fmtStrs, "%d ")
 		fmtArgs = append(fmtArgs, linesCount)
 	}
 
 	if wordsCountFlag {
-		wordsCount = countWords(buffer)
 		fmtStrs = append(fmtStrs, "%d")
 		fmtArgs = append(fmtArgs, wordsCount)
 	}
 
 	if charactersCountFlag {
-		charsCount = countCharacters(buffer)
 		fmtStrs = append(fmtStrs, "%d")
 		fmtArgs = append(fmtArgs, charsCount)
 	}
 
 	if bytesCountFlag {
-		bytesCount = countBytes(buffer)
 		fmtStrs = append(fmtStrs, "%d")
 		fmtArgs = append(fmtArgs, bytesCount)
 	}
@@ -111,7 +118,7 @@ func main() {
 		fmtStr = fmtStr + " %s\n"
 		fmtArgs = append(fmtArgs, args[0])
 	} else {
-		fmtStr = "\n" + fmtStr + "\n"
+		fmtStr = fmtStr + "\n"
 	}
 
 	fmt.Printf(fmtStr, fmtArgs...)
