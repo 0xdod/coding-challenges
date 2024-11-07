@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"unicode/utf8"
@@ -24,106 +25,139 @@ func init() {
 	flag.BoolVar(&charactersCountFlag, "m", false, "count characters")
 }
 
-func setDefaultFlags() {
-	linesCountFlag = true
-	bytesCountFlag = true
-	wordsCountFlag = true
-}
+func count(r io.Reader) (lineCount int64, wordCount int64, byteCount int64, charCount int64) {
+	scanner := bufio.NewScanner(r)
 
-func wc() {
-	var (
-		bytesCount int64
-		linesCount int64
-		wordsCount int64
-		charsCount int64
-	)
-
-	var fmtStrs []string
-	var fmtArgs []interface{}
-
-	args := flag.Args()
-
-	var file *os.File
-
-	if len(args) == 0 {
-		file = os.Stdin
-	} else {
-		var err error
-		path := args[0]
-
-		file, err = os.Open(path)
-
-		if err != nil {
-			fmt.Printf("ccwc: %v\n", err)
-			os.Exit(1)
-		}
-
-		defer file.Close()
-	}
-
-	scanner := bufio.NewScanner(file)
 	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-		advance, token, err = bufio.ScanLines(data, atEOF)
+		// adapted the bufio.ScanLines implementation without the line endings dropped
+		if atEOF && len(data) == 0 {
+			return 0, nil, nil
+		}
 
 		if i := bytes.IndexByte(data, '\n'); i >= 0 {
-			if len(data[:i]) > 0 && data[i-1] == '\r' {
-				token = append(token, '\r')
-			}
-
-			token = append(token, '\n')
+			return i + 1, data[0 : i+1], nil
 		}
 
-		return
+		if atEOF {
+			return len(data), data, nil
+		}
+
+		return 0, nil, nil
 	})
 
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		linesCount += 1
+		lineCount += 1
 
-		wordsCount += int64(len(strings.Fields(line)))
-		charsCount += int64(utf8.RuneCountInString(line))
-		bytesCount += int64(len(line))
+		wordCount += int64(len(strings.Fields(line)))
+		charCount += int64(utf8.RuneCountInString(line))
+		byteCount += int64(len(line))
 	}
 
+	return
+}
+
+func formatCount(count int64) string {
+	return fmt.Sprintf("  %d", count)
+}
+
+func printCounts(lc, wc, cc, bc int64, path string) {
+	text := ""
+
 	if linesCountFlag {
-		fmtStrs = append(fmtStrs, "%d ")
-		fmtArgs = append(fmtArgs, linesCount)
+		text += formatCount(lc)
 	}
 
 	if wordsCountFlag {
-		fmtStrs = append(fmtStrs, "%d")
-		fmtArgs = append(fmtArgs, wordsCount)
+		text += formatCount(wc)
 	}
 
 	if charactersCountFlag {
-		fmtStrs = append(fmtStrs, "%d")
-		fmtArgs = append(fmtArgs, charsCount)
+		text += formatCount(cc)
 	}
 
 	if bytesCountFlag {
-		fmtStrs = append(fmtStrs, "%d")
-		fmtArgs = append(fmtArgs, bytesCount)
+		text += formatCount(bc)
 	}
 
-	fmtStr := "  " + strings.Join(fmtStrs, " ")
-
-	if len(args) > 0 {
-		fmtStr = fmtStr + " %s\n"
-		fmtArgs = append(fmtArgs, args[0])
-	} else {
-		fmtStr = fmtStr + "\n"
+	if path != "" {
+		text += " " + path
 	}
 
-	fmt.Printf(fmtStr, fmtArgs...)
+	fmt.Println(text)
 }
 
-func main() {
+func parseFlags() []string {
 	flag.Parse()
 
 	if flag.NFlag() == 0 {
-		setDefaultFlags()
+		linesCountFlag = true
+		bytesCountFlag = true
+		wordsCountFlag = true
 	}
 
-	wc()
+	args := flag.Args()
+
+	return args
+}
+
+func run(args []string) error {
+	if len(args) == 0 {
+		args = []string{""}
+	}
+
+	var printTotal bool
+
+	if len(args) > 1 {
+		printTotal = true
+	}
+
+	totalLc := int64(0)
+	totalWc := int64(0)
+	totalCc := int64(0)
+	totalBc := int64(0)
+
+	for _, arg := range args {
+		path := arg
+		var file *os.File
+
+		if arg != "" {
+			var err error
+
+			file, err = os.Open(path)
+
+			if err != nil {
+				return err
+			}
+
+			defer file.Close()
+		} else {
+			file = os.Stdin
+		}
+
+		linesCount, wordsCount, bytesCount, charsCount := count(file)
+
+		totalLc += linesCount
+		totalWc += wordsCount
+		totalCc += charsCount
+		totalBc += bytesCount
+
+		printCounts(linesCount, wordsCount, charsCount, bytesCount, path)
+	}
+
+	if printTotal {
+		printCounts(totalLc, totalWc, totalCc, totalBc, "total")
+	}
+
+	return nil
+}
+
+func main() {
+	args := parseFlags()
+
+	if err := run(args); err != nil {
+		fmt.Fprintf(os.Stderr, "ccwc: %v\n", err)
+		os.Exit(1)
+	}
 }
